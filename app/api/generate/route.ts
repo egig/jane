@@ -10,17 +10,43 @@ type GeneratedName = {
   style: string
 }
 
-const FREE_MODELS = [
-  "openai/gpt-oss-120b:free",
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "nousresearch/hermes-3-llama-3.1-405b:free",
-  "openai/gpt-oss-20b:free",
-]
-
+const FREE_MODEL = "openrouter/free"
 const CHEAP_MODEL = "google/gemini-2.0-flash-001"
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function callModel(
+  model: string,
+  apiKey: string,
+  systemPrompt: string,
+  userMessage: string,
+): Promise<{ ok: true; names: GeneratedName[] } | { ok: false; status: number }> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.9,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+    }),
+  })
+
+  if (res.ok) {
+    const data = await res.json()
+    const content: string | undefined = data?.choices?.[0]?.message?.content
+    const names = content ? parseNames(content) : []
+    if (names.length > 0) return { ok: true, names }
+  }
+
+  return { ok: false, status: res.status }
+}
 
 const SYSTEM_PROMPT = `You are JANE (Just Another Naming Engine), an expert at inventing
 human-sounding AI-assistant names built from acronyms — in the spirit of JARVIS or EDITH
@@ -148,92 +174,37 @@ export async function POST(req: NextRequest) {
     : `Keywords: ${keywords}\n\nGenerate 12 app names now.`
 
   try {
-    let lastStatus = 0
+    let result = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage)
 
-    for (const model of FREE_MODELS) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            temperature: 0.9,
-            response_format: { type: "json_object" },
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
-            ],
-          }),
-        })
+    if (!result.ok && result.status === 429) {
+      await sleep(1200)
+      result = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage)
+    }
 
-        if (res.ok) {
-          const data = await res.json()
-          const content: string | undefined = data?.choices?.[0]?.message?.content
-          const names = content ? parseNames(content) : []
-          if (names.length > 0) {
-            setCache(ck, names)
-            incrementDailyCount(ip)
-            return NextResponse.json(
-              { names },
-              { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
-            )
-          }
-          break
-        }
+    if (result.ok) {
+      setCache(ck, result.names)
+      incrementDailyCount(ip)
+      return NextResponse.json(
+        { names: result.names },
+        { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
+      )
+    }
 
-        lastStatus = res.status
-        const detail = await res.text()
-        console.log(`[jane] OpenRouter ${model} error:`, res.status, detail)
+    if (result.status === 429) {
+      console.log("[jane] free model rate-limited, trying cheap paid model:", CHEAP_MODEL)
+      const cheapResult = await callModel(CHEAP_MODEL, apiKey, systemPrompt, userMessage)
 
-        if (res.status === 429 && attempt === 0) {
-          await sleep(1200)
-          continue
-        }
-        break
+      if (cheapResult.ok) {
+        setCache(ck, cheapResult.names)
+        incrementDailyCount(ip)
+        return NextResponse.json(
+          { names: cheapResult.names },
+          { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
+        )
       }
     }
 
-    if (lastStatus === 429) {
-      console.log("[jane] free models rate-limited, trying cheap paid model:", CHEAP_MODEL)
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: CHEAP_MODEL,
-          temperature: 0.9,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-        }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        const content: string | undefined = data?.choices?.[0]?.message?.content
-        const names = content ? parseNames(content) : []
-        if (names.length > 0) {
-          setCache(ck, names)
-          incrementDailyCount(ip)
-          return NextResponse.json(
-            { names },
-            { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
-          )
-        }
-      } else {
-        const detail = await res.text()
-        console.log(`[jane] cheap model ${CHEAP_MODEL} error:`, res.status, detail)
-      }
-    }
-
-    console.log("[jane] all models exhausted, last status:", lastStatus)
+    console.log("[jane] all models exhausted")
     return NextResponse.json(
       { error: "The naming service is busy right now. Please try again in a moment.", code: "server_busy" },
       { status: 502 },
