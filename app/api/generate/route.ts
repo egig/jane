@@ -11,7 +11,7 @@ type GeneratedName = {
 }
 
 const FREE_MODEL = "openrouter/free"
-const CHEAP_MODEL = "google/gemini-2.0-flash-001"
+const AUTO_MODEL = "openrouter/auto"
 
 async function callModel(
   model: string,
@@ -197,8 +197,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.log("[jane] free model failed (status %d), trying cheap paid model:", freeResult.status, CHEAP_MODEL)
-    const cheapResult = await callModel(CHEAP_MODEL, apiKey, systemPrompt, userMessage)
+    console.log("[jane] free model failed (status %d), trying cheap paid model:", freeResult.status, AUTO_MODEL)
+    const cheapResult = await callModel(AUTO_MODEL, apiKey, systemPrompt, userMessage)
 
     if (cheapResult.ok) {
       setCache(ck, cheapResult.names)
