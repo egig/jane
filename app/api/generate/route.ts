@@ -35,6 +35,23 @@ with each word starting with the corresponding letter (e.g. "Just A Rather Very 
 Respond ONLY with valid JSON in this exact shape, no markdown:
 {"names":[{"name":"JARVIS","style":"Just A Rather Very Intelligent System"}]}`
 
+const BACKRONYM_PROMPT = `You are JANE (Just Another Naming Engine), an expert at crafting
+clever backronyms — turning a fixed word into an acronym where each letter starts a word,
+in the spirit of JARVIS ("Just A Rather Very Intelligent System") from Iron Man.
+
+You are given a target NAME (a fixed word) and a description of the user's app.
+Produce 8 distinct, creative expansions of that exact NAME. Each expansion must:
+- Use the letters of the NAME in order, one word per letter (respect the exact spelling).
+- Read as a natural, meaningful phrase that relates to the app description.
+- Be clever, brandable, and human-sounding — not random filler words.
+- Vary in tone across the 8 options (technical, playful, elegant, bold, etc.).
+
+Every returned "name" MUST be the exact target NAME (unchanged). The "style" field holds the
+expansion phrase, with each word capitalized and starting with the matching letter in order.
+
+Respond ONLY with valid JSON in this exact shape, no markdown:
+{"names":[{"name":"JARVIS","style":"Just A Rather Very Intelligent System"}]}`
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
@@ -45,18 +62,39 @@ export async function POST(req: NextRequest) {
   }
 
   let keywords = ""
+  let mode = "generate"
+  let targetName = ""
   try {
     const body = await req.json()
     keywords = typeof body?.keywords === "string" ? body.keywords.trim() : ""
+    mode = body?.mode === "backronym" ? "backronym" : "generate"
+    targetName = typeof body?.name === "string" ? body.name.trim() : ""
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 })
   }
 
   if (!keywords) {
-    return NextResponse.json({ error: "Please provide keywords." }, { status: 400 })
+    return NextResponse.json({ error: "Please provide a description." }, { status: 400 })
   }
 
-  const userMessage = `Keywords: ${keywords}\n\nGenerate 12 app names now.`
+  const isBackronym = mode === "backronym"
+
+  if (isBackronym) {
+    if (!targetName) {
+      return NextResponse.json({ error: "Please provide a name to expand." }, { status: 400 })
+    }
+    if (!/^[A-Za-z]{2,12}$/.test(targetName)) {
+      return NextResponse.json(
+        { error: "The name must be 2-12 letters, no spaces or numbers." },
+        { status: 400 },
+      )
+    }
+  }
+
+  const systemPrompt = isBackronym ? BACKRONYM_PROMPT : SYSTEM_PROMPT
+  const userMessage = isBackronym
+    ? `Target NAME: ${targetName.toUpperCase()}\nApp description: ${keywords}\n\nGenerate 8 backronym expansions of "${targetName.toUpperCase()}" now.`
+    : `Keywords: ${keywords}\n\nGenerate 12 app names now.`
 
   try {
     let lastStatus = 0
@@ -75,7 +113,7 @@ export async function POST(req: NextRequest) {
             temperature: 0.9,
             response_format: { type: "json_object" },
             messages: [
-              { role: "system", content: SYSTEM_PROMPT },
+              { role: "system", content: systemPrompt },
               { role: "user", content: userMessage },
             ],
           }),
