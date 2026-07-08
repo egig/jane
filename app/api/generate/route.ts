@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
 
         lastStatus = res.status
         const detail = await res.text()
-        console.log(`[v0] OpenRouter ${model} error:`, res.status, detail)
+        console.log(`[jane] OpenRouter ${model} error:`, res.status, detail)
 
         if (res.status === 429 && attempt === 0) {
           await sleep(1200)
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (lastStatus === 429) {
-      console.log("[v0] free models rate-limited, trying cheap paid model:", CHEAP_MODEL)
+      console.log("[jane] free models rate-limited, trying cheap paid model:", CHEAP_MODEL)
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -229,17 +229,17 @@ export async function POST(req: NextRequest) {
         }
       } else {
         const detail = await res.text()
-        console.log(`[v0] cheap model ${CHEAP_MODEL} error:`, res.status, detail)
+        console.log(`[jane] cheap model ${CHEAP_MODEL} error:`, res.status, detail)
       }
     }
 
-    console.log("[v0] all models exhausted, last status:", lastStatus)
+    console.log("[jane] all models exhausted, last status:", lastStatus)
     return NextResponse.json(
       { error: "The naming service is busy right now. Please try again in a moment.", code: "server_busy" },
       { status: 502 },
     )
   } catch (err) {
-    console.log("[v0] generate route error:", err)
+    console.log("[jane] generate route error:", err)
     return NextResponse.json(
       { error: "Something went wrong. Please try again.", code: "server_busy" },
       { status: 500 },
