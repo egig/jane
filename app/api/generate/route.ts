@@ -3,7 +3,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { checkDailyQuota, incrementDailyCount } from "@/lib/daily-quota"
 import { getCached, setCache, cacheKey } from "@/lib/cache"
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 type GeneratedName = {
   name: string
@@ -13,39 +13,51 @@ type GeneratedName = {
 const FREE_MODEL = "openrouter/free"
 const CHEAP_MODEL = "google/gemini-2.0-flash-001"
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 async function callModel(
   model: string,
   apiKey: string,
   systemPrompt: string,
   userMessage: string,
+  timeoutMs?: number,
 ): Promise<{ ok: true; names: GeneratedName[] } | { ok: false; status: number }> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.9,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-    }),
-  })
+  const controller = timeoutMs ? new AbortController() : undefined
+  const timer = timeoutMs ? setTimeout(() => controller!.abort(), timeoutMs) : undefined
 
-  if (res.ok) {
-    const data = await res.json()
-    const content: string | undefined = data?.choices?.[0]?.message?.content
-    const names = content ? parseNames(content) : []
-    if (names.length > 0) return { ok: true, names }
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      signal: controller?.signal,
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.9,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+      }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      const content: string | undefined = data?.choices?.[0]?.message?.content
+      const names = content ? parseNames(content) : []
+      if (names.length > 0) return { ok: true, names }
+    }
+
+    return { ok: false, status: res.status }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { ok: false, status: 408 }
+    }
+    return { ok: false, status: 0 }
+  } finally {
+    clearTimeout(timer)
   }
-
-  return { ok: false, status: res.status }
 }
 
 const SYSTEM_PROMPT = `You are JANE (Just Another Naming Engine), an expert at inventing
@@ -170,38 +182,31 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = isBackronym ? BACKRONYM_PROMPT : SYSTEM_PROMPT
   const userMessage = isBackronym
-    ? `Target NAME: ${targetName.toUpperCase()}\nApp description: ${keywords}\n\nGenerate 8 backronym expansions of "${targetName.toUpperCase()}" now.`
-    : `Keywords: ${keywords}\n\nGenerate 12 app names now.`
+    ? `Target NAME: ${targetName.toUpperCase()}\nApp description: ${keywords}\n\nGenerate 3 backronym expansions of "${targetName.toUpperCase()}" now.`
+    : `Keywords: ${keywords}\n\nGenerate 3 app names now.`
 
   try {
-    let result = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage)
+    const freeResult = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage, 5_000)
 
-    if (!result.ok && result.status === 429) {
-      await sleep(1200)
-      result = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage)
-    }
-
-    if (result.ok) {
-      setCache(ck, result.names)
+    if (freeResult.ok) {
+      setCache(ck, freeResult.names)
       incrementDailyCount(ip)
       return NextResponse.json(
-        { names: result.names },
+        { names: freeResult.names },
         { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
       )
     }
 
-    if (result.status === 429) {
-      console.log("[jane] free model rate-limited, trying cheap paid model:", CHEAP_MODEL)
-      const cheapResult = await callModel(CHEAP_MODEL, apiKey, systemPrompt, userMessage)
+    console.log("[jane] free model failed (status %d), trying cheap paid model:", freeResult.status, CHEAP_MODEL)
+    const cheapResult = await callModel(CHEAP_MODEL, apiKey, systemPrompt, userMessage)
 
-      if (cheapResult.ok) {
-        setCache(ck, cheapResult.names)
-        incrementDailyCount(ip)
-        return NextResponse.json(
-          { names: cheapResult.names },
-          { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
-        )
-      }
+    if (cheapResult.ok) {
+      setCache(ck, cheapResult.names)
+      incrementDailyCount(ip)
+      return NextResponse.json(
+        { names: cheapResult.names },
+        { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
+      )
     }
 
     console.log("[jane] all models exhausted")
