@@ -1,9 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, Check, Copy, Wand2 } from "lucide-react"
+import { Sparkles, Check, Copy, Wand2, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { generateNames, type GeneratedName } from "@/lib/name-generator"
+
+type GeneratedName = {
+  id: string
+  name: string
+  style: string
+}
 
 const SUGGESTIONS = ["coffee, delivery", "fitness, tracker", "photo, share", "task, focus"]
 
@@ -11,12 +16,47 @@ export function NameGenerator() {
   const [keywords, setKeywords] = useState("")
   const [names, setNames] = useState<GeneratedName[]>([])
   const [hasGenerated, setHasGenerated] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  const handleGenerate = () => {
-    if (!keywords.trim()) return
-    setNames(generateNames(keywords, 12))
+  const handleGenerate = async () => {
+    const trimmed = keywords.trim()
+    if (!trimmed || isLoading) return
+
+    setIsLoading(true)
+    setError(null)
     setHasGenerated(true)
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords: trimmed }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setNames([])
+        setError(data?.error ?? "Something went wrong. Please try again.")
+        return
+      }
+
+      const withIds: GeneratedName[] = (data.names ?? []).map(
+        (n: { name: string; style: string }, i: number) => ({
+          id: `${Date.now()}-${i}`,
+          name: n.name,
+          style: n.style,
+        }),
+      )
+      setNames(withIds)
+    } catch {
+      setNames([])
+      setError("Could not reach the server. Please check your connection and try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -55,11 +95,15 @@ export function NameGenerator() {
           />
           <Button
             onClick={handleGenerate}
-            disabled={!keywords.trim()}
+            disabled={!keywords.trim() || isLoading}
             className="h-12 gap-2 px-6 text-base font-medium"
           >
-            <Wand2 className="size-5" aria-hidden="true" />
-            Generate
+            {isLoading ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Wand2 className="size-5" aria-hidden="true" />
+            )}
+            {isLoading ? "Generating" : "Generate"}
           </Button>
         </div>
 
@@ -80,7 +124,24 @@ export function NameGenerator() {
 
       {hasGenerated && (
         <div className="mt-8">
-          {names.length > 0 ? (
+          {isLoading ? (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-hidden="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li
+                  key={i}
+                  className="h-[68px] animate-pulse rounded-xl border border-border bg-secondary"
+                />
+              ))}
+            </ul>
+          ) : error ? (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+              <div>
+                <p className="font-medium">Couldn&apos;t generate names</p>
+                <p className="text-muted-foreground">{error}</p>
+              </div>
+            </div>
+          ) : names.length > 0 ? (
             <>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-serif text-lg font-semibold text-foreground">
@@ -128,11 +189,7 @@ export function NameGenerator() {
                 ))}
               </ul>
             </>
-          ) : (
-            <p className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              Enter at least one keyword with 2 or more letters to get started.
-            </p>
-          )}
+          ) : null}
         </div>
       )}
     </section>
