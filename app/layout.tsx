@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: '%s | JANE — Just Another Naming Engine',
   },
   description:
-    'JANE generates human-sounding acronym names for your app or AI assistant — in the spirit of JARVIS and EDITH. Describe your idea and get creative, brandable acronym names instantly.',
+    'JANE generates human-sounding acronym names for your app or AI assistant. Describe your idea and get creative, brandable acronym names instantly.',
   keywords: [
     'acronym name generator',
     'AI name generator',
