@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { Sparkles, Check, Copy, Wand2, Loader2, AlertCircle } from "lucide-react"
+import { useState, useRef } from "react"
+import { Sparkles, Check, Copy, Wand2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { LimitationNotice, type LimitationCode } from "@/components/limitation-notice"
 
 type GeneratedName = {
   id: string
@@ -26,8 +27,10 @@ export function NameGenerator() {
   const [names, setNames] = useState<GeneratedName[]>([])
   const [hasGenerated, setHasGenerated] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [limitation, setLimitation] = useState<{ code: LimitationCode; description?: string } | null>(null)
+  const [remainingQuota, setRemainingQuota] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const lastSubmitRef = useRef(0)
 
   const isBackronym = mode === "backronym"
   const canSubmit =
@@ -38,14 +41,18 @@ export function NameGenerator() {
     setMode(next)
     setNames([])
     setHasGenerated(false)
-    setError(null)
+    setLimitation(null)
   }
 
   const handleGenerate = async () => {
     if (!canSubmit) return
 
+    const now = Date.now()
+    if (now - lastSubmitRef.current < 2000) return
+    lastSubmitRef.current = now
+
     setIsLoading(true)
-    setError(null)
+    setLimitation(null)
     setHasGenerated(true)
 
     try {
@@ -63,8 +70,20 @@ export function NameGenerator() {
 
       if (!res.ok) {
         setNames([])
-        setError(data?.error ?? "Something went wrong. Please try again.")
+        const code: LimitationCode =
+          data?.code === "rate_limit_minute" ||
+          data?.code === "quota_exceeded" ||
+          data?.code === "server_busy" ||
+          data?.code === "invalid_input"
+            ? data.code
+            : "server_busy"
+        setLimitation({ code, description: data?.error })
         return
+      }
+
+      const remaining = res.headers.get("X-RateLimit-Remaining")
+      if (remaining !== null) {
+        setRemainingQuota(Number(remaining))
       }
 
       const withIds: GeneratedName[] = (data.names ?? []).map(
@@ -74,10 +93,16 @@ export function NameGenerator() {
           style: n.style,
         }),
       )
+
+      if (withIds.length === 0) {
+        setLimitation({ code: "no_results" })
+        return
+      }
+
       setNames(withIds)
     } catch {
       setNames([])
-      setError("Could not reach the server. Please check your connection and try again.")
+      setLimitation({ code: "network_error" })
     } finally {
       setIsLoading(false)
     }
@@ -173,6 +198,7 @@ export function NameGenerator() {
             onChange={(e) => setKeywords(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="e.g. smart home assistant"
+            maxLength={200}
             className="h-12 flex-1 rounded-lg border border-input bg-background px-4 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label="App description"
           />
@@ -225,14 +251,8 @@ export function NameGenerator() {
                 />
               ))}
             </ul>
-          ) : error ? (
-            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
-              <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
-              <div>
-                <p className="font-medium">Couldn&apos;t generate results</p>
-                <p className="text-muted-foreground">{error}</p>
-              </div>
-            </div>
+          ) : limitation ? (
+            <LimitationNotice code={limitation.code} description={limitation.description} />
           ) : names.length > 0 ? (
             <>
               <div className="mb-4 flex items-center justify-between">
@@ -249,6 +269,11 @@ export function NameGenerator() {
                   Regenerate
                 </Button>
               </div>
+              {remainingQuota !== null && remainingQuota <= 3 && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {remainingQuota} generation{remainingQuota === 1 ? "" : "s"} remaining today
+                </p>
+              )}
               <ul
                 className={
                   isBackronym

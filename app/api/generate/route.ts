@@ -1,4 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { checkDailyQuota, incrementDailyCount } from "@/lib/daily-quota"
+import { getCached, setCache, cacheKey } from "@/lib/cache"
 
 export const maxDuration = 30
 
@@ -7,8 +10,6 @@ type GeneratedName = {
   style: string
 }
 
-// Ordered list of free OpenRouter models to try. If one is rate-limited
-// or unavailable, we fall through to the next.
 const FREE_MODELS = [
   "openai/gpt-oss-120b:free",
   "qwen/qwen3-next-80b-a3b-instruct:free",
@@ -16,6 +17,8 @@ const FREE_MODELS = [
   "nousresearch/hermes-3-llama-3.1-405b:free",
   "openai/gpt-oss-20b:free",
 ]
+
+const CHEAP_MODEL = "google/gemini-2.0-flash-001"
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -52,7 +55,28 @@ expansion phrase, with each word capitalized and starting with the matching lett
 Respond ONLY with valid JSON in this exact shape, no markdown:
 {"names":[{"name":"JARVIS","style":"Just A Rather Very Intelligent System"}]}`
 
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for")
+  if (forwarded) {
+    return forwarded.split(",")[0].trim()
+  }
+  return "127.0.0.1"
+}
+
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+
+  const rateLimitCheck = checkRateLimit(ip)
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down.", code: "rate_limit_minute" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimitCheck.retryAfter) },
+      },
+    )
+  }
+
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
     return NextResponse.json(
@@ -74,21 +98,48 @@ export async function POST(req: NextRequest) {
   }
 
   if (!keywords) {
-    return NextResponse.json({ error: "Please provide a description." }, { status: 400 })
+    return NextResponse.json(
+      { error: "Please provide a description.", code: "invalid_input" },
+      { status: 400 },
+    )
+  }
+
+  if (keywords.length > 200) {
+    return NextResponse.json(
+      { error: "Description must be 200 characters or fewer.", code: "invalid_input" },
+      { status: 400 },
+    )
   }
 
   const isBackronym = mode === "backronym"
 
   if (isBackronym) {
     if (!targetName) {
-      return NextResponse.json({ error: "Please provide a name to expand." }, { status: 400 })
-    }
-    if (!/^[A-Za-z]{2,12}$/.test(targetName)) {
       return NextResponse.json(
-        { error: "The name must be 2-12 letters, no spaces or numbers." },
+        { error: "Please provide a name to expand.", code: "invalid_input" },
         { status: 400 },
       )
     }
+    if (!/^[A-Za-z]{2,12}$/.test(targetName)) {
+      return NextResponse.json(
+        { error: "The name must be 2-12 letters, no spaces or numbers.", code: "invalid_input" },
+        { status: 400 },
+      )
+    }
+  }
+
+  const ck = cacheKey(mode, keywords, targetName)
+  const cached = getCached<GeneratedName[]>(ck)
+  if (cached) {
+    return NextResponse.json({ names: cached })
+  }
+
+  const quotaCheck = checkDailyQuota(ip)
+  if (!quotaCheck.allowed) {
+    return NextResponse.json(
+      { error: "Daily generation limit reached. Come back tomorrow!", code: "quota_exceeded" },
+      { status: 429 },
+    )
   }
 
   const systemPrompt = isBackronym ? BACKRONYM_PROMPT : SYSTEM_PROMPT
@@ -100,7 +151,6 @@ export async function POST(req: NextRequest) {
     let lastStatus = 0
 
     for (const model of FREE_MODELS) {
-      // Try each model up to 2 times to ride out brief upstream rate limits.
       for (let attempt = 0; attempt < 2; attempt++) {
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -124,9 +174,13 @@ export async function POST(req: NextRequest) {
           const content: string | undefined = data?.choices?.[0]?.message?.content
           const names = content ? parseNames(content) : []
           if (names.length > 0) {
-            return NextResponse.json({ names })
+            setCache(ck, names)
+            incrementDailyCount(ip)
+            return NextResponse.json(
+              { names },
+              { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
+            )
           }
-          // Parsed nothing usable — move on to the next model.
           break
         }
 
@@ -134,7 +188,6 @@ export async function POST(req: NextRequest) {
         const detail = await res.text()
         console.log(`[v0] OpenRouter ${model} error:`, res.status, detail)
 
-        // Only a rate limit is worth retrying the same model.
         if (res.status === 429 && attempt === 0) {
           await sleep(1200)
           continue
@@ -143,20 +196,59 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (lastStatus === 429) {
+      console.log("[v0] free models rate-limited, trying cheap paid model:", CHEAP_MODEL)
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: CHEAP_MODEL,
+          temperature: 0.9,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const content: string | undefined = data?.choices?.[0]?.message?.content
+        const names = content ? parseNames(content) : []
+        if (names.length > 0) {
+          setCache(ck, names)
+          incrementDailyCount(ip)
+          return NextResponse.json(
+            { names },
+            { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
+          )
+        }
+      } else {
+        const detail = await res.text()
+        console.log(`[v0] cheap model ${CHEAP_MODEL} error:`, res.status, detail)
+      }
+    }
+
     console.log("[v0] all models exhausted, last status:", lastStatus)
     return NextResponse.json(
-      { error: "The naming service is busy right now. Please try again in a moment." },
+      { error: "The naming service is busy right now. Please try again in a moment.", code: "server_busy" },
       { status: 502 },
     )
   } catch (err) {
     console.log("[v0] generate route error:", err)
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 })
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again.", code: "server_busy" },
+      { status: 500 },
+    )
   }
 }
 
 function parseNames(content: string): GeneratedName[] {
   let raw = content.trim()
-  // Strip markdown code fences if the model added them.
   raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
 
   try {
