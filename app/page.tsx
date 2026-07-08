@@ -13,8 +13,8 @@ export default function Page() {
           Give your app a name like JARVIS
         </h1>
         <p className="mx-auto mt-4 max-w-md text-pretty leading-relaxed text-muted-foreground">
-          Describe your app and JANE invents human-sounding acronym names —
-          each one spelling out a phrase, in the spirit of JARVIS and EDITH. Tap any name to copy it.
+          Describe your idea and JANE invents human-sounding acronym names —
+          each one spelling out a phrase. Tap any name to copy it.
         </p>
       </header>
 
