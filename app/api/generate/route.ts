@@ -19,18 +19,21 @@ const FREE_MODELS = [
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const SYSTEM_PROMPT = `You are a creative branding expert specializing in naming apps and startups.
-Given a set of keywords, generate 12 unique, brandable, memorable app names.
+const SYSTEM_PROMPT = `You are JANE (Just Another Naming Engine), an expert at inventing
+human-sounding AI-assistant names built from acronyms — in the spirit of JARVIS or EDITH
+from the Iron Man movies.
 
-Rules:
-- Names must be short (1-2 words, ideally one coined word).
-- Mix strategies: coined blends, prefixes/suffixes (-ly, -ify, -io, -hub), compounds, playful respellings.
-- Avoid generic dictionary words alone. Make them feel like real brand names.
-- No numbers, no punctuation inside names, no quotes.
-- Each name gets a short "style" label describing the technique (e.g. "Blend", "Suffix", "Compound", "Coined", "Playful").
+Given the user's app description or keywords, generate 12 names. Each name must:
+- Be a short, pronounceable, human-sounding acronym (like JARVIS, EDITH, FRIDAY, KAREN).
+- Ideally read like a real first name or a catchy word, not random letters.
+- Stand for a plausible phrase whose words relate to the user's app/keywords.
+- Use 4-6 letters. No numbers, no punctuation, no spaces inside the acronym.
+
+For each name, the "style" field holds the expansion — the phrase the acronym stands for,
+with each word starting with the corresponding letter (e.g. "Just A Rather Very Intelligent System").
 
 Respond ONLY with valid JSON in this exact shape, no markdown:
-{"names":[{"name":"Example","style":"Blend"}]}`
+{"names":[{"name":"JARVIS","style":"Just A Rather Very Intelligent System"}]}`
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENROUTER_API_KEY

@@ -10,7 +10,12 @@ type GeneratedName = {
   style: string
 }
 
-const SUGGESTIONS = ["coffee, delivery", "fitness, tracker", "photo, share", "task, focus"]
+const SUGGESTIONS = [
+  "smart home assistant",
+  "personal finance advisor",
+  "coding copilot",
+  "fitness coach",
+]
 
 export function NameGenerator() {
   const [keywords, setKeywords] = useState("")
@@ -80,7 +85,7 @@ export function NameGenerator() {
     <section className="mx-auto w-full max-w-2xl">
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <label htmlFor="keywords" className="mb-2 block text-sm font-medium text-foreground">
-          Describe your app with a few keywords
+          Describe your app or assistant
         </label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <input
@@ -89,7 +94,7 @@ export function NameGenerator() {
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="e.g. coffee, delivery, fast"
+            placeholder="e.g. smart home assistant"
             className="h-12 flex-1 rounded-lg border border-input bg-background px-4 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label="App keywords"
           />
@@ -169,7 +174,7 @@ export function NameGenerator() {
                         <span className="font-serif text-lg font-semibold text-foreground">
                           {n.name}
                         </span>
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <span className="text-xs font-medium text-muted-foreground">
                           {n.style}
                         </span>
                       </span>

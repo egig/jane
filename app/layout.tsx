@@ -14,8 +14,8 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Nameforge — App Name Generator',
-  description: 'Generate creative, brandable app names from your keywords in one click.',
+  title: 'JANE — Just Another Naming Engine',
+  description: 'Generate human-sounding acronym names for your app, in the spirit of JARVIS and EDITH.',
   generator: 'v0.app',
   icons: {
     icon: [
