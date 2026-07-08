@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Sparkles, Check, Copy, Wand2, Loader2 } from "lucide-react"
+import posthog from "posthog-js"
 import { Button } from "@/components/ui/button"
 import { LimitationNotice, type LimitationCode } from "@/components/limitation-notice"
 
@@ -38,6 +39,7 @@ export function NameGenerator() {
 
   const switchMode = (next: Mode) => {
     if (next === mode) return
+    posthog.capture("mode_switch", { mode: next })
     setMode(next)
     setNames([])
     setHasGenerated(false)
@@ -54,6 +56,7 @@ export function NameGenerator() {
     setIsLoading(true)
     setLimitation(null)
     setHasGenerated(true)
+    posthog.capture("generate_click", { mode, keywords_length: keywords.trim().length })
 
     try {
       const res = await fetch("/api/generate", {
@@ -117,6 +120,7 @@ export function NameGenerator() {
 
   const handleCopy = async (item: GeneratedName) => {
     const text = isBackronym ? `${item.name} — ${item.style}` : item.name
+    posthog.capture("copy_name", { mode, name: item.name })
     try {
       await navigator.clipboard.writeText(text)
       setCopiedId(item.id)
@@ -223,7 +227,7 @@ export function NameGenerator() {
               <button
                 key={s}
                 type="button"
-                onClick={() => setKeywords(s)}
+                onClick={() => { setKeywords(s); posthog.capture("suggestion_click", { suggestion: s }) }}
                 className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 {s}

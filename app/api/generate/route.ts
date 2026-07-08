@@ -1,7 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { PostHog } from "posthog-node"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { checkDailyQuota, incrementDailyCount } from "@/lib/daily-quota"
 import { getCached, setCache, cacheKey } from "@/lib/cache"
+
+function ph() {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
+  if (!key) return null
+  return new PostHog(key, {
+    host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
+  })
+}
 
 export const maxDuration = 60
 
@@ -103,9 +112,12 @@ function getClientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
+  const client = ph()
 
   const rateLimitCheck = checkRateLimit(ip)
   if (!rateLimitCheck.allowed) {
+    await client?.capture({ distinctId: ip, event: "rate_limited", properties: { ip } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "Too many requests. Please slow down.", code: "rate_limit_minute" },
       {
@@ -115,27 +127,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  let keywords = ""
+  let mode = "generate"
+  let targetName = ""
+
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "missing_api_key" } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "OPENROUTER_API_KEY is not configured." },
       { status: 500 },
     )
   }
-
-  let keywords = ""
-  let mode = "generate"
-  let targetName = ""
   try {
     const body = await req.json()
     keywords = typeof body?.keywords === "string" ? body.keywords.trim() : ""
     mode = body?.mode === "backronym" ? "backronym" : "generate"
     targetName = typeof body?.name === "string" ? body.name.trim() : ""
   } catch {
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode: "unknown", reason: "invalid_body" } })
+    await client?.shutdown()
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 })
   }
 
   if (!keywords) {
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "empty_keywords" } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "Please provide a description.", code: "invalid_input" },
       { status: 400 },
@@ -143,6 +161,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (keywords.length > 200) {
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "keywords_too_long" } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "Description must be 200 characters or fewer.", code: "invalid_input" },
       { status: 400 },
@@ -153,12 +173,16 @@ export async function POST(req: NextRequest) {
 
   if (isBackronym) {
     if (!targetName) {
+      await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "empty_target_name" } })
+      await client?.shutdown()
       return NextResponse.json(
         { error: "Please provide a name to expand.", code: "invalid_input" },
         { status: 400 },
       )
     }
     if (!/^[A-Za-z]{2,12}$/.test(targetName)) {
+      await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "invalid_target_name" } })
+      await client?.shutdown()
       return NextResponse.json(
         { error: "The name must be 2-12 letters, no spaces or numbers.", code: "invalid_input" },
         { status: 400 },
@@ -169,11 +193,14 @@ export async function POST(req: NextRequest) {
   const ck = cacheKey(mode, keywords, targetName)
   const cached = getCached<GeneratedName[]>(ck)
   if (cached) {
+    await client?.shutdown()
     return NextResponse.json({ names: cached })
   }
 
   const quotaCheck = checkDailyQuota(ip)
   if (!quotaCheck.allowed) {
+    await client?.capture({ distinctId: ip, event: "quota_exceeded", properties: { ip, mode } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "Daily generation limit reached. Come back tomorrow!", code: "quota_exceeded" },
       { status: 429 },
@@ -191,6 +218,8 @@ export async function POST(req: NextRequest) {
     if (freeResult.ok) {
       setCache(ck, freeResult.names)
       incrementDailyCount(ip)
+      await client?.capture({ distinctId: ip, event: "generation_success", properties: { mode, model: "free", names_count: freeResult.names.length } })
+      await client?.shutdown()
       return NextResponse.json(
         { names: freeResult.names },
         { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
@@ -203,6 +232,8 @@ export async function POST(req: NextRequest) {
     if (cheapResult.ok) {
       setCache(ck, cheapResult.names)
       incrementDailyCount(ip)
+      await client?.capture({ distinctId: ip, event: "generation_success", properties: { mode, model: "paid", names_count: cheapResult.names.length } })
+      await client?.shutdown()
       return NextResponse.json(
         { names: cheapResult.names },
         { headers: { "X-RateLimit-Remaining": String(quotaCheck.remaining - 1) } },
@@ -210,12 +241,16 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[jane] all models exhausted")
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "all_models_exhausted" } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "The naming service is busy right now. Please try again in a moment.", code: "server_busy" },
       { status: 502 },
     )
   } catch (err) {
     console.log("[jane] generate route error:", err)
+    await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "unexpected_error" } })
+    await client?.shutdown()
     return NextResponse.json(
       { error: "Something went wrong. Please try again.", code: "server_busy" },
       { status: 500 },
