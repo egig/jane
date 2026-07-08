@@ -108,7 +108,7 @@ export function NameGenerator() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault()
       handleGenerate()
@@ -193,7 +193,6 @@ export function NameGenerator() {
         <div className="flex flex-col gap-3 sm:flex-row">
           <textarea
             id="keywords"
-            type="text"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             onKeyDown={handleKeyDown}
