@@ -9,10 +9,10 @@ export default function Page() {
           <Sparkles className="size-4 text-primary" aria-hidden="true" />
           JANE · Just Another Naming Engine
         </div>
-        <h1 className="text-balance font-serif text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+        <h1 className="text-balance font-serif text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl">
           Give your app a name like JARVIS
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-pretty leading-relaxed text-muted-foreground">
+        <p className="mx-auto mt-4 max-w-md text-balance leading-relaxed text-muted-foreground">
           Describe your idea and JANE invents human-sounding acronym names —
           each one spelling out a phrase. Tap any name to copy it.
         </p>

@@ -191,21 +191,22 @@ export function NameGenerator() {
           Describe your app or assistant
         </label>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <input
+          <textarea
             id="keywords"
             type="text"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="e.g. smart home assistant"
+            
             maxLength={200}
-            className="h-12 flex-1 rounded-lg border border-input bg-background px-4 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="h-12 p-2 resize-vertical max-h-[100px] flex-1 rounded-lg border border-input bg-background px-4 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label="App description"
-          />
+          ></textarea>
           <Button
             onClick={handleGenerate}
             disabled={!canSubmit}
-            className="h-12 gap-2 px-6 text-base font-medium"
+            className="h-12 gap-2 px-6 text-base font-medium sm:w-auto w-full"
           >
             {isLoading ? (
               <Loader2 className="size-5 animate-spin" aria-hidden="true" />
@@ -244,7 +245,7 @@ export function NameGenerator() {
         <div className="mt-8">
           {isLoading ? (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-hidden="true">
-              {Array.from({ length: 6 }).map((_, i) => (
+              {Array.from({ length: 8 }).map((_, i) => (
                 <li
                   key={i}
                   className="h-[68px] animate-pulse rounded-xl border border-border bg-secondary"
@@ -286,7 +287,7 @@ export function NameGenerator() {
                     <button
                       type="button"
                       onClick={() => handleCopy(n)}
-                      className="group flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:border-primary hover:bg-secondary"
+                      className="group flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-colors active:scale-[0.98] hover:border-primary hover:bg-secondary sm:gap-3 sm:px-4 sm:py-3.5"
                     >
                       <span className="flex flex-col">
                         <span className="font-serif text-lg font-semibold uppercase tracking-wide text-foreground">

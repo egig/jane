@@ -64,7 +64,7 @@ const SYSTEM_PROMPT = `You are JANE (Just Another Naming Engine), an expert at i
 human-sounding AI-assistant names built from acronyms — in the spirit of JARVIS or EDITH
 from the Iron Man movies.
 
-Given the user's app description or keywords, generate 3 names. Each name must:
+Given the user's app description or keywords, generate 10 names. Each name must:
 - Be a short, pronounceable, human-sounding acronym (like JARVIS, EDITH, FRIDAY, KAREN).
 - Ideally read like a real first name or a catchy word, not random letters.
 - Stand for a plausible phrase whose words relate to the user's app/keywords.
@@ -182,8 +182,8 @@ export async function POST(req: NextRequest) {
 
   const systemPrompt = isBackronym ? BACKRONYM_PROMPT : SYSTEM_PROMPT
   const userMessage = isBackronym
-    ? `Target NAME: ${targetName.toUpperCase()}\nApp description: ${keywords}\n\nGenerate 3 backronym expansions of "${targetName.toUpperCase()}" now.`
-    : `Keywords: ${keywords}\n\nGenerate 3 app names now.`
+    ? `Target NAME: ${targetName.toUpperCase()}\nApp description: ${keywords}\n\nGenerate 10 backronym expansions of "${targetName.toUpperCase()}" now.`
+    : `Keywords: ${keywords}\n\nGenerate 10 app names now.`
 
   try {
     const freeResult = await callModel(FREE_MODEL, apiKey, systemPrompt, userMessage, 5_000)
