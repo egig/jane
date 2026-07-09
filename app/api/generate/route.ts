@@ -3,6 +3,7 @@ import { PostHog } from "posthog-node"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { checkDailyQuota, incrementDailyCount } from "@/lib/daily-quota"
 import { getCached, setCache, cacheKey } from "@/lib/cache"
+import { logGeneration } from "@/lib/db"
 
 function ph() {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
   const rateLimitCheck = checkRateLimit(ip)
   if (!rateLimitCheck.allowed) {
     await client?.capture({ distinctId: ip, event: "rate_limited", properties: { ip } })
+    await logGeneration({ ip, mode: "generate", keywords: "", status: "rate_limited" })
     await client?.shutdown()
     return NextResponse.json(
       { error: "Too many requests. Please slow down.", code: "rate_limit_minute" },
@@ -134,6 +136,7 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "missing_api_key" } })
+    await logGeneration({ ip, mode, keywords, status: "error", errorCode: "missing_api_key" })
     await client?.shutdown()
     return NextResponse.json(
       { error: "OPENROUTER_API_KEY is not configured." },
@@ -147,12 +150,14 @@ export async function POST(req: NextRequest) {
     targetName = typeof body?.name === "string" ? body.name.trim() : ""
   } catch {
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode: "unknown", reason: "invalid_body" } })
+    await logGeneration({ ip, mode: "unknown", keywords: "", status: "error", errorCode: "invalid_body" })
     await client?.shutdown()
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 })
   }
 
   if (!keywords) {
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "empty_keywords" } })
+    await logGeneration({ ip, mode, keywords, status: "error", errorCode: "empty_keywords" })
     await client?.shutdown()
     return NextResponse.json(
       { error: "Please provide a description.", code: "invalid_input" },
@@ -162,6 +167,7 @@ export async function POST(req: NextRequest) {
 
   if (keywords.length > 200) {
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "keywords_too_long" } })
+    await logGeneration({ ip, mode, keywords, status: "error", errorCode: "keywords_too_long" })
     await client?.shutdown()
     return NextResponse.json(
       { error: "Description must be 200 characters or fewer.", code: "invalid_input" },
@@ -174,6 +180,7 @@ export async function POST(req: NextRequest) {
   if (isBackronym) {
     if (!targetName) {
       await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "empty_target_name" } })
+      await logGeneration({ ip, mode, keywords, targetName, status: "error", errorCode: "empty_target_name" })
       await client?.shutdown()
       return NextResponse.json(
         { error: "Please provide a name to expand.", code: "invalid_input" },
@@ -182,6 +189,7 @@ export async function POST(req: NextRequest) {
     }
     if (!/^[A-Za-z]{2,12}$/.test(targetName)) {
       await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "invalid_target_name" } })
+      await logGeneration({ ip, mode, keywords, targetName, status: "error", errorCode: "invalid_target_name" })
       await client?.shutdown()
       return NextResponse.json(
         { error: "The name must be 2-12 letters, no spaces or numbers.", code: "invalid_input" },
@@ -193,6 +201,7 @@ export async function POST(req: NextRequest) {
   const ck = cacheKey(mode, keywords, targetName)
   const cached = getCached<GeneratedName[]>(ck)
   if (cached) {
+    await logGeneration({ ip, mode, keywords, targetName, status: "success", names: cached, cached: true })
     await client?.shutdown()
     return NextResponse.json({ names: cached })
   }
@@ -200,6 +209,7 @@ export async function POST(req: NextRequest) {
   const quotaCheck = checkDailyQuota(ip)
   if (!quotaCheck.allowed) {
     await client?.capture({ distinctId: ip, event: "quota_exceeded", properties: { ip, mode } })
+    await logGeneration({ ip, mode, keywords, targetName, status: "quota_exceeded" })
     await client?.shutdown()
     return NextResponse.json(
       { error: "Daily generation limit reached. Come back tomorrow!", code: "quota_exceeded" },
@@ -218,6 +228,7 @@ export async function POST(req: NextRequest) {
     if (freeResult.ok) {
       setCache(ck, freeResult.names)
       incrementDailyCount(ip)
+      await logGeneration({ ip, mode, keywords, targetName, status: "success", model: FREE_MODEL, names: freeResult.names })
       await client?.capture({ distinctId: ip, event: "generation_success", properties: { mode, model: "free", names_count: freeResult.names.length } })
       await client?.shutdown()
       return NextResponse.json(
@@ -232,6 +243,7 @@ export async function POST(req: NextRequest) {
     if (cheapResult.ok) {
       setCache(ck, cheapResult.names)
       incrementDailyCount(ip)
+      await logGeneration({ ip, mode, keywords, targetName, status: "success", model: AUTO_MODEL, names: cheapResult.names })
       await client?.capture({ distinctId: ip, event: "generation_success", properties: { mode, model: "paid", names_count: cheapResult.names.length } })
       await client?.shutdown()
       return NextResponse.json(
@@ -241,6 +253,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[jane] all models exhausted")
+    await logGeneration({ ip, mode, keywords, targetName, status: "error", errorCode: "all_models_exhausted" })
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "all_models_exhausted" } })
     await client?.shutdown()
     return NextResponse.json(
@@ -249,6 +262,7 @@ export async function POST(req: NextRequest) {
     )
   } catch (err) {
     console.log("[jane] generate route error:", err)
+    await logGeneration({ ip, mode, keywords, targetName, status: "error", errorCode: "unexpected_error" })
     await client?.capture({ distinctId: ip, event: "generation_failure", properties: { mode, reason: "unexpected_error" } })
     await client?.shutdown()
     return NextResponse.json(
