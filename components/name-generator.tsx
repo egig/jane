@@ -315,6 +315,10 @@ export function NameGenerator() {
                   </li>
                 ))}
               </ul>
+
+              <div className="mt-6 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-center text-sm text-muted-foreground">
+                Hi, thank you for trying this project, please share this app and <a href="https://buymeacoffee.com/egig">support me</a> if you like it.
+              </div>
             </>
           ) : null}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, DM_Sans } from 'next/font/google'
 import { PostHogProvider } from '@/components/posthog-provider'
+import { Footer } from '@/components/footer'
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
@@ -124,7 +125,12 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
-        <PostHogProvider>{children}</PostHogProvider>
+        <PostHogProvider>
+          <div className="flex min-h-screen flex-col">
+            {children}
+            <Footer />
+          </div>
+        </PostHogProvider>
       </body>
     </html>
   )
