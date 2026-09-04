@@ -1,20 +1,43 @@
-# jane
+# JANE — Just Another Naming Engine
 
-JANE — Just Another Naming Engine. Generate human-sounding acronym names for your app.
+An agent skill that invents human-sounding acronym names for your app, product,
+or AI assistant — in the spirit of **JARVIS** ("Just A Rather Very Intelligent
+System") or **EDITH** from the Iron Man movies. Every name spells out a phrase
+that relates to what you're building.
 
-## Getting Started
+Two modes:
 
-First, run the development server:
+- **Generate** — describe your app, get ~10 acronym name ideas with expansions.
+- **Backronym** — give a fixed word (NOVA, EDITH, AURA…), get expansions of that
+  exact word tailored to your app.
+
+It's a single Markdown file — no runtime, no API keys, no dependencies. The
+agent's own model does the work.
+
+## Install
+
+### Claude Code
 
 ```bash
-pnpm dev
+git clone https://github.com/egig/jane
+cp -r jane/skills/jane ~/.claude/skills/jane
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then ask Claude to name something, or invoke it directly with `/jane`.
 
-## Learn More
+### Other agents
 
-To learn more, take a look at the following resources:
+Point your agent at [`AGENTS.md`](AGENTS.md), or copy `skills/jane/SKILL.md`
+into wherever your tool loads skills from. The skill is tool-agnostic — standard
+frontmatter (`name`, `description`) and a Markdown body.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Usage examples
+
+- "Name my smart-home assistant app"
+- "Give me acronym names for a personal finance coach"
+- "Make NOVA a backronym for a coding copilot"
+- "What could EDITH stand for if it's a calendar app?"
+
+---
+
+Made by [egig](https://github.com/egig) · [buymeacoffee.com/egig](https://buymeacoffee.com/egig)
