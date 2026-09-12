@@ -19,3 +19,7 @@ instructions, no scripts, no network calls, no dependencies.
 
 Claude Code discovers the same skill via `.claude/skills/jane` (a symlink to
 `skills/jane`).
+
+**Install anywhere:** `npx skills add egig/jane` — the `skills/jane/SKILL.md`
+layout is the flat convention that tool expects, so no repo changes were
+needed to support it.

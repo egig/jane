@@ -16,7 +16,18 @@ agent's own model does the work.
 
 ## Install
 
-### Claude Code
+### Any agent, via npx
+
+```bash
+npx skills add egig/jane
+```
+
+This installs into whichever supported agents it detects on your machine
+(Claude Code, Cursor, Codex, Windsurf, and 75+ others) — see
+[vercel-labs/skills](https://github.com/vercel-labs/skills). Add
+`--skill jane` to skip the picker, or `--list` to preview first.
+
+### Claude Code (manual)
 
 ```bash
 git clone https://github.com/egig/jane
@@ -25,7 +36,7 @@ cp -r jane/skills/jane ~/.claude/skills/jane
 
 Then ask Claude to name something, or invoke it directly with `/jane`.
 
-### Other agents
+### Other agents (manual)
 
 Point your agent at [`AGENTS.md`](AGENTS.md), or copy `skills/jane/SKILL.md`
 into wherever your tool loads skills from. The skill is tool-agnostic — standard
