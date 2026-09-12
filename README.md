@@ -1,13 +1,16 @@
 # JANE — Just Another Naming Engine
 
-An agent skill that invents human-sounding acronym names for your app, product,
-or AI assistant — in the spirit of **JARVIS** ("Just A Rather Very Intelligent
-System") or **EDITH** from the Iron Man movies. Every name spells out a phrase
-that relates to what you're building.
+An agent skill that invents names for your app, product, or AI assistant —
+human-sounding acronym names in the spirit of **JARVIS** ("Just A Rather Very
+Intelligent System") or **EDITH** from the Iron Man movies, plus brandable
+names in the spirit of Google, FedEx, or Lyft.
 
 Two modes:
 
-- **Generate** — describe your app, get ~10 acronym name ideas with expansions.
+- **Generate** — describe your app, get a mixed set of name ideas: acronym
+  names that spell out a phrase, plus evocative, compound-word, non-English,
+  brandable, short-phrase, and alternate-spelling names. Ask for one flavor
+  only (e.g. "just acronym names") to narrow it down.
 - **Backronym** — give a fixed word (NOVA, EDITH, AURA…), get expansions of that
   exact word tailored to your app.
 
@@ -46,6 +49,7 @@ frontmatter (`name`, `description`) and a Markdown body.
 
 - "Name my smart-home assistant app"
 - "Give me acronym names for a personal finance coach"
+- "I need a brandable name for my app"
 - "Make NOVA a backronym for a coding copilot"
 - "What could EDITH stand for if it's a calendar app?"
 

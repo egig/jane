@@ -7,12 +7,14 @@ This repo is a single agent skill: **JANE — Just Another Naming Engine**.
 **Location:** [`skills/jane/SKILL.md`](skills/jane/SKILL.md)
 
 **What it does:** generates JARVIS-style acronym names (each name spells out a
-phrase) for an app, product, or AI assistant, and expands a fixed word into
-backronyms.
+phrase) plus brandable names (evocative, compound-word, non-English,
+brandable, short-phrase, alternate-spelling) for an app, product, or AI
+assistant, and expands a fixed word into backronyms.
 
-**When to use it:** the user wants a name that stands for something, a backronym
-for an existing word, or a human-sounding assistant name in the spirit of
-JARVIS, EDITH, or FRIDAY.
+**When to use it:** the user wants a name that stands for something, a
+brandable/evocative/compound-word product name, a backronym for an existing
+word, or a human-sounding assistant name in the spirit of JARVIS, EDITH, or
+FRIDAY.
 
 Load `skills/jane/SKILL.md` and follow it. It is self-contained — plain
 instructions, no scripts, no network calls, no dependencies.
