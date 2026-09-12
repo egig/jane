@@ -1,5 +1,7 @@
 # JANE — Just Another Naming Engine
 
+![JANE demo](0912.gif)
+
 An agent skill that invents names for your app, product, or AI assistant —
 human-sounding acronym names in the spirit of **JARVIS** ("Just A Rather Very
 Intelligent System") or **EDITH** from the Iron Man movies, plus brandable
